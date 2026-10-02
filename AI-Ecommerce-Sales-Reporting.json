@@ -1,0 +1,437 @@
+{
+  "name": "AI-Ecommerce-Sales-Reporting",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Hi there ! I am a Data Analyst Assistant how can I help you ?",
+        "options": {
+          "inputPlaceholder": "Type your question..",
+          "title": "Your First Insight",
+          "responseMode": "lastNode"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -384,
+        -16
+      ],
+      "id": "366d6aad-326a-44e9-bde3-ff1815564354",
+      "name": "When chat message received",
+      "webhookId": "63a3b9f8-0118-4eb1-b62c-171878f9124b"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('When chat message received').first().json.chatInput }}\n\nHere is the processed analytical summary from the ecommerce dataset:\n\n{{ JSON.stringify($json) }}\n\nUse the analytical summary above to answer the user's question.\nDo not invent or estimate any values.",
+        "options": {
+          "systemMessage": "You are a Senior Data Analyst and Business Intelligence Agent.\n\nYou receive a compact analytical summary generated from an ecommerce dataset.\n\nThe raw Google Sheets data has already been processed before reaching you.\n\nUse the provided analytical summary to answer the user's question.\n\nNever invent numbers.\n\nNever claim that you analyzed raw records that were not provided to you.\n\nUse the KPI calculations, product analysis, category analysis, regional analysis, monthly analysis, and data-quality information provided in the input.\n\nFor questions about:\n\n- Revenue\n- Profit\n- Orders\n- Customers\n- Quantity\n- Average Order Value\n- Profit Margin\n- Top Products\n- Categories\n- Regions\n- Monthly performance\n- Data quality\n\nuse the corresponding calculated results.\n\nFor rankings, preserve the correct order.\n\nFor business insights, distinguish between:\n1. Observed result\n2. Interpretation\n3. Recommendation\n\nIf a required metric is null or unavailable, explain that the required source column was not available.\n\nDo not fabricate missing information.\n\nWhen asked for a report, use:\n\n## Executive Summary\n\n## KPI Summary\n\n## Product Performance\n\n## Category Performance\n\n## Regional Performance\n\n## Monthly Performance\n\n## Data Quality\n\n## Key Insights\n\n## Business Recommendations\n\nKeep responses professional, concise, and suitable for business stakeholders."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        176,
+        -16
+      ],
+      "id": "4d5ff6e3-f286-41c3-8135-07c763dc8ea0",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        272,
+        192
+      ],
+      "id": "6e214c3b-279d-4fbb-9a78-062c738a8308",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-5-5",
+          "mode": "list",
+          "cachedResultName": "Claude Sonnet 5.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        176,
+        192
+      ],
+      "id": "3072c9b9-2860-480e-a99c-470e336022b3",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "18GnHmYT3pJtrPgKxKWmZ0dlqny1McwdIYIq4qpgKFGk",
+          "mode": "list",
+          "cachedResultName": "Ecommerce Sales Analysis",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/18GnHmYT3pJtrPgKxKWmZ0dlqny1McwdIYIq4qpgKFGk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1589100670,
+          "mode": "list",
+          "cachedResultName": "Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/18GnHmYT3pJtrPgKxKWmZ0dlqny1McwdIYIq4qpgKFGk/edit#gid=1589100670"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -208,
+        -16
+      ],
+      "id": "01e73e3f-3e95-494f-895f-90c306c7237c",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LMsWKBMBMc14qlGN",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all rows returned by Google Sheets\nconst rows = $input.all().map(item => item.json);\n\nif (!rows.length) {\n  return [{\n    json: {\n      error: \"No ecommerce records were found.\"\n    }\n  }];\n}\n\n// ---------- Helper functions ----------\n\nfunction findColumn(possibleNames) {\n  const keys = Object.keys(rows[0]);\n\n  return keys.find(key =>\n    possibleNames.some(name =>\n      key.toLowerCase().trim() === name.toLowerCase().trim()\n    )\n  );\n}\n\nfunction toNumber(value) {\n  if (value === null || value === undefined || value === '') return 0;\n\n  const cleaned = String(value)\n    .replace(/₹/g, '')\n    .replace(/,/g, '')\n    .replace(/%/g, '')\n    .trim();\n\n  const number = Number(cleaned);\n\n  return Number.isFinite(number) ? number : 0;\n}\n\n// ---------- Detect columns ----------\n\nconst orderIdCol = findColumn([\n  'Order ID',\n  'OrderID',\n  'Order_Id',\n  'order_id'\n]);\n\nconst orderDateCol = findColumn([\n  'Order Date',\n  'OrderDate',\n  'Order_Date',\n  'date',\n  'Date'\n]);\n\nconst customerCol = findColumn([\n  'Customer ID',\n  'CustomerID',\n  'Customer_Id',\n  'customer_id'\n]);\n\nconst productCol = findColumn([\n  'Product',\n  'Product Name',\n  'ProductName',\n  'Product ID',\n  'ProductID'\n]);\n\nconst categoryCol = findColumn([\n  'Category',\n  'Product Category'\n]);\n\nconst subCategoryCol = findColumn([\n  'Sub-Category',\n  'Sub Category',\n  'SubCategory'\n]);\n\nconst regionCol = findColumn([\n  'Region',\n  'Sales Region'\n]);\n\nconst quantityCol = findColumn([\n  'Quantity',\n  'Qty'\n]);\n\nconst salesCol = findColumn([\n  'Sales',\n  'Revenue',\n  'Amount',\n  'Total Sales'\n]);\n\nconst profitCol = findColumn([\n  'Profit',\n  'Net Profit'\n]);\n\n// ---------- Basic KPIs ----------\n\nconst totalRevenue = salesCol\n  ? rows.reduce((sum, row) => sum + toNumber(row[salesCol]), 0)\n  : null;\n\nconst totalProfit = profitCol\n  ? rows.reduce((sum, row) => sum + toNumber(row[profitCol]), 0)\n  : null;\n\nconst totalQuantity = quantityCol\n  ? rows.reduce((sum, row) => sum + toNumber(row[quantityCol]), 0)\n  : null;\n\nconst uniqueOrders = orderIdCol\n  ? new Set(\n      rows\n        .map(row => row[orderIdCol])\n        .filter(value => value !== null && value !== undefined && value !== '')\n    ).size\n  : rows.length;\n\nconst uniqueCustomers = customerCol\n  ? new Set(\n      rows\n        .map(row => row[customerCol])\n        .filter(value => value !== null && value !== undefined && value !== '')\n    ).size\n  : null;\n\nconst averageOrderValue =\n  totalRevenue !== null && uniqueOrders\n    ? totalRevenue / uniqueOrders\n    : null;\n\nconst profitMargin =\n  totalRevenue && totalProfit !== null\n    ? (totalProfit / totalRevenue) * 100\n    : null;\n\n// ---------- Grouping helper ----------\n\nfunction groupBy(column, valueColumn) {\n  if (!column || !valueColumn) return [];\n\n  const groups = {};\n\n  for (const row of rows) {\n    const group = String(row[column] ?? 'Unknown').trim() || 'Unknown';\n\n    if (!groups[group]) {\n      groups[group] = {\n        name: group,\n        revenue: 0,\n        profit: 0,\n        quantity: 0,\n        records: 0\n      };\n    }\n\n    groups[group].revenue += toNumber(row[salesCol]);\n    \n    if (profitCol) {\n      groups[group].profit += toNumber(row[profitCol]);\n    }\n\n    if (quantityCol) {\n      groups[group].quantity += toNumber(row[quantityCol]);\n    }\n\n    groups[group].records++;\n  }\n\n  return Object.values(groups)\n    .map(item => ({\n      ...item,\n      profitMargin:\n        item.revenue !== 0\n          ? (item.profit / item.revenue) * 100\n          : 0\n    }))\n    .sort((a, b) => b.revenue - a.revenue);\n}\n\n// ---------- Product analysis ----------\n\nlet topProducts = [];\n\nif (productCol && salesCol) {\n  topProducts = groupBy(productCol, salesCol)\n    .slice(0, 10);\n}\n\n// ---------- Category analysis ----------\n\nlet categories = [];\n\nif (categoryCol && salesCol) {\n  categories = groupBy(categoryCol, salesCol);\n}\n\n// ---------- Region analysis ----------\n\nlet regions = [];\n\nif (regionCol && salesCol) {\n  regions = groupBy(regionCol, salesCol);\n}\n\n// ---------- Monthly analysis ----------\n\nlet monthly = [];\n\nif (orderDateCol && salesCol) {\n\n  const monthGroups = {};\n\n  for (const row of rows) {\n\n    const rawDate = row[orderDateCol];\n\n    if (!rawDate) continue;\n\n    const date = new Date(rawDate);\n\n    if (isNaN(date.getTime())) continue;\n\n    const monthKey =\n      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;\n\n    if (!monthGroups[monthKey]) {\n      monthGroups[monthKey] = {\n        month: monthKey,\n        revenue: 0,\n        profit: 0,\n        records: 0\n      };\n    }\n\n    monthGroups[monthKey].revenue += toNumber(row[salesCol]);\n\n    if (profitCol) {\n      monthGroups[monthKey].profit += toNumber(row[profitCol]);\n    }\n\n    monthGroups[monthKey].records++;\n  }\n\n  monthly = Object.values(monthGroups)\n    .sort((a, b) => a.month.localeCompare(b.month))\n    .map(item => ({\n      ...item,\n      profitMargin:\n        item.revenue !== 0\n          ? (item.profit / item.revenue) * 100\n          : 0\n    }));\n}\n\n// ---------- Data quality ----------\n\nconst missingValues = {};\n\nfor (const column of Object.keys(rows[0])) {\n\n  const missing = rows.filter(row =>\n    row[column] === null ||\n    row[column] === undefined ||\n    String(row[column]).trim() === ''\n  ).length;\n\n  if (missing > 0) {\n    missingValues[column] = missing;\n  }\n}\n\n// Duplicate rows\nconst rowStrings = rows.map(row => JSON.stringify(row));\nconst duplicateCount = rowStrings.length - new Set(rowStrings).size;\n\n// ---------- Get user's original question ----------\n\nlet userQuestion = '';\n\ntry {\n  userQuestion =\n    $('When chat message received').first().json.chatInput || '';\n} catch (error) {\n  userQuestion = '';\n}\n\n// ---------- Final compact output ----------\n\nreturn [{\n  json: {\n\n    userQuestion,\n\n    dataset: {\n      rows: rows.length,\n      columns: Object.keys(rows[0]),\n      detectedColumns: {\n        orderId: orderIdCol,\n        orderDate: orderDateCol,\n        customer: customerCol,\n        product: productCol,\n        category: categoryCol,\n        subCategory: subCategoryCol,\n        region: regionCol,\n        quantity: quantityCol,\n        sales: salesCol,\n        profit: profitCol\n      }\n    },\n\n    kpis: {\n      totalRevenue,\n      totalProfit,\n      totalQuantity,\n      totalOrders: uniqueOrders,\n      totalCustomers: uniqueCustomers,\n      averageOrderValue,\n      profitMargin\n    },\n\n    topProducts,\n\n    categories,\n\n    regions,\n\n    monthly,\n\n    dataQuality: {\n      duplicateRows: duplicateCount,\n      missingValues\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        -16
+      ],
+      "id": "8c09724e-b6b6-4405-ba86-3f6166a863b0",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -496,
+        400
+      ],
+      "id": "02a7a56b-c8d9-4899-8366-0a4ad773b21c",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "18GnHmYT3pJtrPgKxKWmZ0dlqny1McwdIYIq4qpgKFGk",
+          "mode": "list",
+          "cachedResultName": "Ecommerce Sales Analysis",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/18GnHmYT3pJtrPgKxKWmZ0dlqny1McwdIYIq4qpgKFGk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1589100670,
+          "mode": "list",
+          "cachedResultName": "Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/18GnHmYT3pJtrPgKxKWmZ0dlqny1McwdIYIq4qpgKFGk/edit#gid=1589100670"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -272,
+        400
+      ],
+      "id": "41d4f105-d224-401b-a061-d7812f6176bc",
+      "name": "Get row(s) in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "LMsWKBMBMc14qlGN",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(item => item.json);\n\nif (!rows.length) {\n  return [\n    {\n      json: {\n        dataset: {\n          rows: 0,\n          columns: []\n        },\n        kpis: {},\n        topProducts: [],\n        categories: [],\n        regions: [],\n        monthly: [],\n        dataQuality: {}\n      }\n    }\n  ];\n}\n\n// ---------- Helper functions ----------\n\nfunction findColumn(possibleNames) {\n  const columns = Object.keys(rows[0] || {});\n\n  return columns.find(col =>\n    possibleNames.some(name =>\n      col.toLowerCase().trim() === name.toLowerCase().trim()\n    )\n  );\n}\n\nfunction toNumber(value) {\n  if (value === null || value === undefined || value === '') {\n    return 0;\n  }\n\n  const num = Number(String(value).replace(/,/g, ''));\n\n  return Number.isFinite(num) ? num : 0;\n}\n\nfunction round(value, decimals = 2) {\n  return Number(Number(value || 0).toFixed(decimals));\n}\n\n// ---------- Detect columns ----------\n\nconst orderIdCol = findColumn([\n  'Order ID',\n  'OrderID',\n  'Order_Id',\n  'order_id'\n]);\n\nconst orderDateCol = findColumn([\n  'Order Date',\n  'OrderDate',\n  'Order_Date',\n  'Date',\n  'date'\n]);\n\nconst customerIdCol = findColumn([\n  'Customer ID',\n  'CustomerID',\n  'Customer_Id',\n  'customer_id'\n]);\n\nconst productCol = findColumn([\n  'Product',\n  'Product Name',\n  'ProductName',\n  'Product ID',\n  'ProductID'\n]);\n\nconst categoryCol = findColumn([\n  'Category',\n  'Product Category'\n]);\n\nconst subCategoryCol = findColumn([\n  'Sub-Category',\n  'Sub Category',\n  'SubCategory'\n]);\n\nconst regionCol = findColumn([\n  'Region',\n  'Sales Region'\n]);\n\nconst quantityCol = findColumn([\n  'Quantity',\n  'Qty'\n]);\n\nconst salesCol = findColumn([\n  'Sales',\n  'Revenue',\n  'Amount',\n  'Total Sales'\n]);\n\nconst profitCol = findColumn([\n  'Profit',\n  'Net Profit'\n]);\n\n// ---------- Basic KPI calculations ----------\n\nconst totalRevenue = rows.reduce(\n  (sum, row) => sum + toNumber(row[salesCol]),\n  0\n);\n\nconst totalProfit = rows.reduce(\n  (sum, row) => sum + toNumber(row[profitCol]),\n  0\n);\n\nconst totalQuantity = rows.reduce(\n  (sum, row) => sum + toNumber(row[quantityCol]),\n  0\n);\n\nconst orderIds = new Set(\n  rows\n    .map(row => row[orderIdCol])\n    .filter(value => value !== undefined && value !== null && value !== '')\n);\n\nconst customerIds = new Set(\n  rows\n    .map(row => row[customerIdCol])\n    .filter(value => value !== undefined && value !== null && value !== '')\n);\n\nconst totalOrders = orderIds.size || rows.length;\n\nconst totalCustomers = customerIds.size;\n\nconst averageOrderValue =\n  totalOrders > 0\n    ? totalRevenue / totalOrders\n    : 0;\n\nconst profitMargin =\n  totalRevenue !== 0\n    ? (totalProfit / totalRevenue) * 100\n    : 0;\n\n// ---------- Grouping helper ----------\n\nfunction groupBy(column) {\n  const groups = {};\n\n  if (!column) return [];\n\n  for (const row of rows) {\n    const key = row[column];\n\n    if (\n      key === undefined ||\n      key === null ||\n      String(key).trim() === ''\n    ) {\n      continue;\n    }\n\n    const name = String(key).trim();\n\n    if (!groups[name]) {\n      groups[name] = {\n        name,\n        revenue: 0,\n        profit: 0,\n        quantity: 0\n      };\n    }\n\n    groups[name].revenue += toNumber(row[salesCol]);\n    groups[name].profit += toNumber(row[profitCol]);\n    groups[name].quantity += toNumber(row[quantityCol]);\n  }\n\n  return Object.values(groups)\n    .map(item => ({\n      ...item,\n      revenue: round(item.revenue),\n      profit: round(item.profit),\n      quantity: round(item.quantity),\n      profitMargin:\n        item.revenue !== 0\n          ? round((item.profit / item.revenue) * 100)\n          : 0\n    }))\n    .sort((a, b) => b.revenue - a.revenue);\n}\n\n// ---------- Product performance ----------\n\nconst productGroups = groupBy(productCol);\n\nconst topProducts = productGroups\n  .slice(0, 10);\n\n// ---------- Category performance ----------\n\nconst categories = groupBy(categoryCol);\n\n// ---------- Regional performance ----------\n\nconst regions = groupBy(regionCol);\n\n// ---------- Monthly performance ----------\n\nconst monthlyGroups = {};\n\nif (orderDateCol) {\n\n  for (const row of rows) {\n\n    const rawDate = row[orderDateCol];\n\n    if (!rawDate) continue;\n\n    const date = new Date(rawDate);\n\n    if (isNaN(date.getTime())) continue;\n\n    const year = date.getFullYear();\n\n    const month = date.getMonth() + 1;\n\n    const key =\n      `${year}-${String(month).padStart(2, '0')}`;\n\n    if (!monthlyGroups[key]) {\n      monthlyGroups[key] = {\n        month: key,\n        revenue: 0,\n        profit: 0,\n        quantity: 0\n      };\n    }\n\n    monthlyGroups[key].revenue += toNumber(row[salesCol]);\n    monthlyGroups[key].profit += toNumber(row[profitCol]);\n    monthlyGroups[key].quantity += toNumber(row[quantityCol]);\n  }\n}\n\nconst monthly = Object.values(monthlyGroups)\n  .map(item => ({\n    month: item.month,\n    revenue: round(item.revenue),\n    profit: round(item.profit),\n    quantity: round(item.quantity),\n    profitMargin:\n      item.revenue !== 0\n        ? round((item.profit / item.revenue) * 100)\n        : 0\n  }))\n  .sort((a, b) => a.month.localeCompare(b.month));\n\n// ---------- Duplicate detection ----------\n\nconst rowSignatures = new Set();\n\nlet duplicateRows = 0;\n\nfor (const row of rows) {\n\n  const signature = JSON.stringify(row);\n\n  if (rowSignatures.has(signature)) {\n    duplicateRows++;\n  } else {\n    rowSignatures.add(signature);\n  }\n}\n\n// ---------- Missing values ----------\n\nconst missingValues = {};\n\nfor (const column of Object.keys(rows[0] || {})) {\n\n  const missing = rows.filter(row =>\n    row[column] === undefined ||\n    row[column] === null ||\n    String(row[column]).trim() === ''\n  ).length;\n\n  if (missing > 0) {\n    missingValues[column] = missing;\n  }\n}\n\n// ---------- Final reporting object ----------\n\nconst report = {\n\n  dataset: {\n    rows: rows.length,\n    columns: Object.keys(rows[0] || {}).length,\n    columnNames: Object.keys(rows[0] || {})\n  },\n\n  detectedColumns: {\n    orderId: orderIdCol,\n    orderDate: orderDateCol,\n    customerId: customerIdCol,\n    product: productCol,\n    category: categoryCol,\n    subCategory: subCategoryCol,\n    region: regionCol,\n    quantity: quantityCol,\n    sales: salesCol,\n    profit: profitCol\n  },\n\n  kpis: {\n    totalRevenue: round(totalRevenue),\n    totalProfit: round(totalProfit),\n    profitMargin: round(profitMargin),\n    totalOrders,\n    totalCustomers,\n    averageOrderValue: round(averageOrderValue),\n    totalQuantity: round(totalQuantity)\n  },\n\n  topProducts,\n\n  categories,\n\n  regions,\n\n  monthly,\n\n  dataQuality: {\n    duplicateRows,\n    missingValues\n  }\n};\n\nreturn [\n  {\n    json: report\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        400
+      ],
+      "id": "79cf1f82-8f99-4934-a8d4-d3d724a749ba",
+      "name": "Reporting KPI & Analysis"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a Senior Data Analyst preparing a professional\nE-commerce Sales Performance Report for business stakeholders.\n\nThe raw dataset has already been processed by an n8n\ndata-processing step.\n\nAnalyze ONLY the analytical summary provided below.\n\nRules:\n- Do not invent numbers.\n- Do not estimate missing values.\n- Do not change the calculated values.\n- Do not assign a currency unless the dataset specifies one.\n- Keep the report professional and business-focused.\n- Use exact values from the data.\n- Clearly distinguish observations from recommendations.\n\nCreate the report using this structure:\n\n# E-commerce Sales Performance Report\n\n## 1. Executive Summary\n\nProvide a concise overview of the business performance.\n\n## 2. KPI Summary\n\nCreate a table containing:\n\n- Total Revenue\n- Total Profit\n- Profit Margin\n- Total Orders\n- Total Customers\n- Average Order Value\n- Total Quantity\n\n## 3. Product Performance\n\nAnalyze the top 10 products by revenue.\n\nInclude:\n- Product\n- Revenue\n- Profit\n- Profit Margin\n- Quantity\n\nIdentify notable profitability patterns without inventing information.\n\n## 4. Category Performance\n\nAnalyze revenue, profit, quantity and profit margin by category.\n\n## 5. Regional Performance\n\nAnalyze revenue, profit, quantity and profit margin by region.\n\nIdentify regions with different revenue/profit patterns.\n\n## 6. Monthly Performance\n\nAnalyze monthly revenue, profit, quantity and profit margin.\n\nIdentify notable changes or patterns visible in the data.\n\n## 7. Profitability Analysis\n\nDiscuss:\n- Overall profit margin\n- High-revenue/high-profit areas\n- High-revenue/lower-profit areas\n- Any other profitability patterns directly supported by the data\n\n## 8. Data Quality\n\nReport:\n- Number of duplicate rows\n- Missing values\n- Dataset size\n- Any relevant data-quality observations\n\n## 9. Key Business Insights\n\nProvide 5-7 concise insights based strictly on the supplied data.\n\n## 10. Business Recommendations\n\nProvide practical recommendations based only on the observed data.\n\n## 11. Conclusion\n\nProvide a short management-level conclusion.\n\nUse clean Markdown formatting.\nKeep the report professional, concise and executive-friendly.\n\nHere is the processed analytical summary:\n\n{{ JSON.stringify($json) }}\n\nAlso prepare this report as a GitHub portfolio artifact.\n\nUse Markdown formatting.\n\nThe report must be suitable for a public data analyst portfolio.\n\nDo not include:\n- customer names\n- customer email addresses\n- customer phone numbers\n- personally identifiable information\n- raw transaction-level records\n\nUse this title:\n\n# AI-Powered E-commerce Sales Performance Report\n\nInclude:\n\n## Project Overview\n\n## Executive Summary\n\n## KPI Summary\n\n## Product Performance\n\n## Category Performance\n\n## Regional Performance\n\n## Monthly Performance\n\n## Profitability Analysis\n\n## Data Quality\n\n## Key Business Insights\n\n## Business Recommendations\n\n## Conclusion\n\nAt the bottom include:\n\n## Technical Workflow\n\nDescribe the automation:\n\nGoogle Sheets → Data Processing → KPI Analysis → Claude AI → Gmail → GitHub\n\nMention that the workflow was built using n8n and Claude.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        176,
+        400
+      ],
+      "id": "6504c8ea-89f7-44ee-8d42-3b6689579e10",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-5-5",
+          "mode": "list",
+          "cachedResultName": "Claude Sonnet 5.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        176,
+        576
+      ],
+      "id": "7947102e-5b49-4a69-be6e-162b66f73389",
+      "name": "Anthropic Chat Model1",
+      "credentials": {
+        "anthropicApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "prokinff2210@gmail.com",
+        "subject": "E-commerce Sales Performance Report",
+        "emailType": "text",
+        "message": "={{ $json.text }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        736,
+        400
+      ],
+      "id": "24a02eac-7433-4d51-8f84-a76632745d13",
+      "name": "Send a message",
+      "webhookId": "46a09624-bab9-454b-af62-09169bd65733",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "GsAFsvQXKA2JnGLg",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "file",
+        "owner": {
+          "__rl": true,
+          "value": "nimeshpanicker",
+          "mode": "list",
+          "cachedResultName": "nimeshpanicker",
+          "cachedResultUrl": "https://github.com/nimeshpanicker"
+        },
+        "repository": {
+          "__rl": true,
+          "value": "AI-Ecommerce-Sales-Reporting",
+          "mode": "list",
+          "cachedResultName": "AI-Ecommerce-Sales-Reporting",
+          "cachedResultUrl": "https://github.com/nimeshpanicker/AI-Ecommerce-Sales-Reporting"
+        },
+        "filePath": "=reports/ecommerce_sales_report_{{ $now.toFormat('yyyy-MM-dd') }}.md",
+        "fileContent": "={{ $json.text }}",
+        "commitMessage": "Add automated ecommerce sales report"
+      },
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        528,
+        400
+      ],
+      "id": "1fb2e3e8-4f2b-48d0-822b-c7662f2612c8",
+      "name": "Create a file",
+      "webhookId": "ed4ac8c1-321c-4fda-aa94-b2bfc4fb3c8c",
+      "credentials": {
+        "githubOAuth2Api": {
+          "id": "OGnYMMMF7sPovBzC",
+          "name": "GitHub account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Reporting KPI & Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reporting KPI & Analysis": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Create a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a file": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "0a9a4c7d-723c-4ff4-aa99-7672177118d7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "7f0b62669e35990e44f7d675c60b2faf887feb5cc1ddcb570a0dc2103cfbbb51"
+  },
+  "nodeGroups": [],
+  "id": "IwEzXVomPPljdmFP",
+  "tags": []
+}
